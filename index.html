@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EonTimer — PR Previews</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #c8dce8;
+      color: #1a2a38;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #4a6a82; margin-bottom: 2rem; font-size: 0.95rem; }
+
+    #list {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .pr-card {
+      background: white;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .pr-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+
+    .pr-title { font-weight: 600; font-size: 1rem; }
+    .pr-meta  { font-size: 0.8rem; color: #4a6a82; margin-top: 0.2rem; }
+
+    .links { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+    .btn {
+      display: inline-block;
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn-preview  { background: #5b9bd5; color: white; }
+    .btn-preview:hover { background: #4a86c0; }
+    .btn-github   { background: #e8f0f7; color: #1a2a38; }
+    .btn-github:hover { background: #d4e4f0; }
+
+    #status { color: #4a6a82; font-size: 0.95rem; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>EonTimer PR Previews</h1>
+  <p class="subtitle">Each open pull request is deployed here for testing.</p>
+  <div id="list"><p id="status">Loading…</p></div>
+
+  <script>
+    const OWNER = 'DasAmpharos';
+    const REPO  = 'EonTimer';
+    const DEV_REPO = 'EonTimer-dev';
+
+    async function fetchJSON(url) {
+      const r = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json();
+    }
+
+    async function main() {
+      const statusEl = document.getElementById('status');
+      const listEl   = document.getElementById('list');
+
+      try {
+        // List subdirectories of the gh-pages branch
+        const contents = await fetchJSON(
+          `https://api.github.com/repos/${OWNER}/${DEV_REPO}/contents/?ref=gh-pages`
+        );
+
+        const prDirs = contents
+          .filter(e => e.type === 'dir' && /^pr-\d+$/.test(e.name))
+          .map(e => parseInt(e.name.replace('pr-', ''), 10))
+          .sort((a, b) => b - a);
+
+        if (prDirs.length === 0) {
+          statusEl.textContent = 'No PR previews deployed yet.';
+          return;
+        }
+
+        // Fetch PR metadata from GitHub API
+        const prData = await Promise.allSettled(
+          prDirs.map(n => fetchJSON(`https://api.github.com/repos/${OWNER}/${REPO}/pulls/${n}`))
+        );
+
+        statusEl.remove();
+
+        prDirs.forEach((prNumber, i) => {
+          const result = prData[i];
+          const pr = result.status === 'fulfilled' ? result.value : null;
+
+          const previewUrl = `https://${OWNER.toLowerCase()}.github.io/${DEV_REPO}/pr-${prNumber}/`;
+          const githubUrl  = `https://github.com/${OWNER}/${REPO}/pull/${prNumber}`;
+
+          const card = document.createElement('div');
+          card.className = 'pr-card';
+          card.innerHTML = `
+            <div>
+              <div class="pr-title">${pr ? escHtml(pr.title) : `PR #${prNumber}`}</div>
+              <div class="pr-meta">
+                #${prNumber}${pr ? ` · ${escHtml(pr.user.login)} · ${pr.state}` : ''}
+              </div>
+            </div>
+            <div class="links">
+              <a class="btn btn-preview" href="${previewUrl}" target="_blank">Open preview</a>
+              <a class="btn btn-github"  href="${githubUrl}"  target="_blank">View PR</a>
+            </div>
+          `;
+          listEl.appendChild(card);
+        });
+
+      } catch (err) {
+        statusEl.textContent = `Failed to load previews: ${err.message}`;
+      }
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    main();
+  </script>
+</body>
+</html>

@@ -1,1 +1,0 @@
-if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/EonTimer-dev/pr-259/sw.js', { scope: '/EonTimer-dev/pr-259/' })})}
